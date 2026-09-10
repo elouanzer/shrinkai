@@ -1,3 +1,14 @@
+# shrinkai
+data/
+models/
+*.pt
+*.pth
+*.bin
+*.safetensors
+
+.coverage
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -1,0 +1,3 @@
+# Profiler
+
+::: shrinkai.analysis

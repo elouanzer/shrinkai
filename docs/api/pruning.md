@@ -1,0 +1,3 @@
+# Pruning
+
+::: shrinkai.compression.pruning
