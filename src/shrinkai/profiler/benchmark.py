@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..utils import resolve_device
+from .flops import count_flops
 from .latency import measure_latency
 from .memory import count_parameters, estimate_model_size_mb
 
@@ -20,6 +21,7 @@ class ModelProfile:
     sample_latency_ms: float
     fps: float
     accuracy: float | None = None
+    flops: int | None = None
 
 
 class BenchmarkReport:
@@ -57,7 +59,7 @@ class BenchmarkReport:
         console = Console()
         gains = self._compute_gains()
 
-        table = Table(title="Distillation Benchmark Report", header_style="bold cyan")
+        table = Table(title="Benchmark Report", header_style="bold cyan")
         table.add_column("Metric", style="bold")
         table.add_column(f"Teacher ({self.teacher.name})", justify="right")
         table.add_column(f"Student ({self.student.name})", justify="right")
@@ -93,6 +95,19 @@ class BenchmarkReport:
             gains["speedup"],
         )
 
+        if self.teacher.flops is not None and self.student.flops is not None:
+            flops_reduction = (
+                (1 - self.student.flops / self.teacher.flops) * 100
+                if self.teacher.flops > 0
+                else 0.0
+            )
+            table.add_row(
+                "FLOPs / Sample",
+                f"{self.teacher.flops / 1e6:.2f} MFLOPs",
+                f"{self.student.flops / 1e6:.2f} MFLOPs",
+                f"-{flops_reduction:.1f}%",
+            )
+
         if self.teacher.accuracy is not None and self.student.accuracy is not None:
             retention = (
                 (self.student.accuracy / self.teacher.accuracy) * 100
@@ -122,6 +137,7 @@ class Profiler:
         student_name: str = "Student",
         teacher_acc: float | None = None,
         student_acc: float | None = None,
+        compute_flops: bool = False,
     ) -> BenchmarkReport:
         """Executes complete profiling suite on both models and generates comparison.
 
@@ -134,6 +150,10 @@ class Profiler:
             student_name: Display label for student.
             teacher_acc: Optional pre-computed teacher accuracy.
             student_acc: Optional pre-computed student accuracy.
+            compute_flops: If True, also counts and reports FLOPs per sample for
+                both models (see `count_flops`). Defaults to False, since custom/
+                opaque ops (e.g. quantized kernels) are silently undercounted as
+                0 FLOPs, opt in only when both models use standard ops.
 
         Returns:
             BenchmarkReport: Structured report ready for `.show()`.
@@ -143,6 +163,7 @@ class Profiler:
         t_params = count_parameters(teacher)["total_params"]
         t_size = estimate_model_size_mb(teacher)
         t_lat = measure_latency(teacher, sample_input, resolved_device)
+        t_flops = count_flops(teacher, sample_input, resolved_device) if compute_flops else None
         teacher_profile = ModelProfile(
             name=teacher_name,
             total_params=t_params,
@@ -150,15 +171,18 @@ class Profiler:
             sample_latency_ms=t_lat["sample_latency_ms"],
             fps=t_lat["fps"],
             accuracy=teacher_acc,
+            flops=t_flops,
         )
 
         s_params = count_parameters(student)["total_params"]
         s_size = estimate_model_size_mb(student)
         s_lat = measure_latency(student, sample_input, resolved_device)
+        s_flops = count_flops(student, sample_input, resolved_device) if compute_flops else None
         student_profile = ModelProfile(
             name=student_name,
             total_params=s_params,
             size_mb=s_size,
+            flops=s_flops,
             sample_latency_ms=s_lat["sample_latency_ms"],
             fps=s_lat["fps"],
             accuracy=student_acc,
