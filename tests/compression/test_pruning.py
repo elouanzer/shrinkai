@@ -1,4 +1,5 @@
 import pytest
+import torch
 import torch.nn as nn
 
 from shrinkai.compression.pruning import Pruner, PruningConfig
@@ -91,3 +92,21 @@ def test_finalize_pruning(model):
     # But weights should still have the zeros baked in
     sparsity_after = (final_model.fc1.weight == 0).sum().item()
     assert sparsity_before == sparsity_after, "Sparsity was lost during finalization."
+
+
+def test_benchmark_does_not_crash_on_active_pruning_hooks(model):
+    """Regression test: benchmark() must clone a model with live prune hooks.
+
+    `copy.deepcopy` raises on modules with an active `torch.nn.utils.prune`
+    reparametrization (masked weights are non-leaf tensors). benchmark() must
+    not rely on it to produce a non-mutating finalized copy for evaluation.
+    """
+    config = PruningConfig(method="unstructured", amount=0.3, target_types=(nn.Linear,))
+    pruner = Pruner(config)
+    pruned_model = pruner.apply(model)
+
+    report = pruner.benchmark(model, pruned_model, sample_input=torch.randn(1, 10))
+
+    # The caller's pruned_model must remain untouched (hooks still attached).
+    assert hasattr(pruned_model.fc1, "weight_mask")
+    assert report.student.total_params == report.teacher.total_params

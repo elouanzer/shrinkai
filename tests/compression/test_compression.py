@@ -76,6 +76,41 @@ def test_ptq_application(model, sample_input):
     assert is_quantized, "Linear layers were not dynamically quantized."
 
 
+def test_static_ptq_with_calibration(model, sample_input):
+    """Test Static PTQ calibrates and quantizes both weights and activations."""
+    calibrate_data = [torch.randn(4, 10) for _ in range(5)]
+    config = QuantConfig(target_dtype="int8", strategy="ptq", calibrate_data=calibrate_data)
+    quantizer = Quantizer(config)
+
+    quantized_model = quantizer.apply(model)
+    output = quantized_model(sample_input)
+
+    # Assert forward pass works and dequantizes back to a standard float tensor.
+    assert output.shape == (1, 5)
+    assert output.dtype == torch.float32
+
+    # Static PTQ wraps the model in QuantWrapper(quant, module, dequant); the
+    # inner Linear layers must be swapped to their quantized counterparts.
+    is_quantized = any(
+        isinstance(module, torch.ao.nn.quantized.Linear) for module in quantized_model.modules()
+    )
+    assert is_quantized, "Linear layers were not statically quantized."
+
+
+def test_ptq_without_calibrate_data_stays_dynamic(model, sample_input):
+    """Test that omitting calibrate_data keeps the existing Dynamic PTQ behavior."""
+    config = QuantConfig(target_dtype="int8", strategy="ptq", calibrate_data=None)
+    quantizer = Quantizer(config)
+
+    quantized_model = quantizer.apply(model)
+
+    is_dynamic = any(
+        isinstance(module, torch.ao.nn.quantized.dynamic.Linear)
+        for module in quantized_model.modules()
+    )
+    assert is_dynamic, "Dynamic PTQ path should remain the default when uncalibrated."
+
+
 def test_qat_application_and_finalize(model, sample_input):
     """Test QAT inserts FakeQuantize nodes and finalize bakes them."""
     config = QuantConfig(target_dtype="int8", strategy="qat")

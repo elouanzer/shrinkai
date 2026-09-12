@@ -173,3 +173,95 @@ def test_engine_handles_tuple_outputs(mock_data):
         assert "loss" in metrics
     except Exception as e:
         pytest.fail(f"Engine failed to handle tuple outputs: {e}")
+
+
+# ==========================================
+# 4. MIXED PRECISION & GRADIENT CLIPPING
+# ==========================================
+
+
+def test_train_epoch_with_amp_runs_on_cpu(engine_setup, mock_data):
+    """Verifies training runs successfully under autocast mixed precision on CPU."""
+    student, teacher, criterion, optimizer = engine_setup
+    engine = DistillationEngine(student, teacher, criterion, optimizer, device="cpu", use_amp=True)
+
+    metrics = engine.train_epoch(mock_data, epoch_idx=1, total_epochs=1)
+
+    assert "loss" in metrics
+    # No CUDA available in this context, so the (fp16) GradScaler must stay inactive.
+    assert not engine._use_scaler
+
+
+def test_grad_clip_norm_is_applied(engine_setup, mock_data, monkeypatch):
+    """Verifies clip_grad_norm_ is invoked with the configured max norm."""
+    student, teacher, criterion, optimizer = engine_setup
+    engine = DistillationEngine(
+        student, teacher, criterion, optimizer, device="cpu", grad_clip_norm=0.5
+    )
+
+    calls = []
+    original_clip = nn.utils.clip_grad_norm_
+
+    def spy_clip(parameters, max_norm, *args, **kwargs):
+        calls.append(max_norm)
+        return original_clip(parameters, max_norm, *args, **kwargs)
+
+    monkeypatch.setattr(nn.utils, "clip_grad_norm_", spy_clip)
+
+    engine.train_epoch(mock_data, epoch_idx=1, total_epochs=1)
+
+    assert calls and all(norm == 0.5 for norm in calls)
+
+
+def test_no_grad_clip_by_default(engine_setup, mock_data, monkeypatch):
+    """Verifies clip_grad_norm_ is never called when grad_clip_norm is None."""
+    student, teacher, criterion, optimizer = engine_setup
+    engine = DistillationEngine(student, teacher, criterion, optimizer, device="cpu")
+
+    called = []
+    monkeypatch.setattr(nn.utils, "clip_grad_norm_", lambda *a, **k: called.append(True))
+
+    engine.train_epoch(mock_data, epoch_idx=1, total_epochs=1)
+
+    assert not called
+
+
+# ==========================================
+# 5. EARLY STOPPING & RESUME
+# ==========================================
+
+
+def test_fit_stops_early_when_callback_requests_it(engine_setup, mock_data):
+    """Verifies fit() breaks out of the loop when a callback exposes stop=True."""
+    student, teacher, criterion, optimizer = engine_setup
+    engine = DistillationEngine(student, teacher, criterion, optimizer, device="cpu")
+
+    class StubEarlyStopper:
+        def __init__(self):
+            self.stop = False
+            self.calls = 0
+
+        def __call__(self, epoch, metrics):
+            self.calls += 1
+            if epoch == 2:
+                self.stop = True
+
+    stopper = StubEarlyStopper()
+    history = engine.fit(mock_data, epochs=5, callbacks=[stopper])
+
+    assert stopper.calls == 2
+    assert len(history["train_loss"]) == 2
+
+
+def test_fit_resume_continues_history(engine_setup, mock_data):
+    """Verifies start_epoch + history let fit() continue a previous, shorter run."""
+    student, teacher, criterion, optimizer = engine_setup
+    engine = DistillationEngine(student, teacher, criterion, optimizer, device="cpu")
+
+    first_history = engine.fit(mock_data, epochs=2)
+    assert len(first_history["train_loss"]) == 2
+
+    resumed_history = engine.fit(mock_data, epochs=4, start_epoch=3, history=first_history)
+
+    assert resumed_history is first_history
+    assert len(resumed_history["train_loss"]) == 4

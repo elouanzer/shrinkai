@@ -235,3 +235,145 @@ def test_save_and_load_student(base_distiller, tmp_path: Path):
     # Verify weights have been restored to the modified version
     restored_weights = base_distiller.student.fc.weight
     assert torch.allclose(restored_weights, modified_weights)
+
+
+# ==========================================
+# 7. MIXED PRECISION / GRADIENT CLIPPING WIRING
+# ==========================================
+
+
+def test_distiller_forwards_amp_and_grad_clip_to_engine(mock_data):
+    """Verifies use_amp / grad_clip_norm are passed down to the DistillationEngine."""
+    distiller = Distiller(
+        teacher=DummyModel(),
+        student=DummyModel(),
+        optimizer="sgd",
+        device="cpu",
+        use_amp=True,
+        grad_clip_norm=1.0,
+    )
+
+    assert distiller._engine.use_amp is True
+    assert distiller._engine.grad_clip_norm == 1.0
+
+    # End-to-end sanity check: training must still run fine with both enabled.
+    history = distiller.fit(mock_data, epochs=1)
+    assert len(history["train_loss"]) == 1
+
+
+# ==========================================
+# 8. CHECKPOINT / RESUME TESTS
+# ==========================================
+
+
+def test_fit_resume_continues_from_last_epoch(base_distiller, mock_data):
+    """Verifies fit(resume=True) continues training instead of restarting at epoch 1."""
+    base_distiller.fit(mock_data, epochs=2)
+    assert len(base_distiller.history["train_loss"]) == 2
+
+    base_distiller.fit(mock_data, epochs=5, resume=True)
+    assert len(base_distiller.history["train_loss"]) == 5
+
+
+def test_fit_without_resume_restarts_history(base_distiller, mock_data):
+    """Verifies the default (resume=False) still restarts a fresh history each call."""
+    base_distiller.fit(mock_data, epochs=2)
+    assert len(base_distiller.history["train_loss"]) == 2
+
+    base_distiller.fit(mock_data, epochs=1)
+    assert len(base_distiller.history["train_loss"]) == 1
+
+
+def test_save_and_load_checkpoint_roundtrip(mock_data, tmp_path: Path):
+    """Verifies a checkpoint restores student weights, optimizer and history state."""
+    source = Distiller(teacher=DummyModel(), student=DummyModel(), optimizer="sgd", device="cpu")
+    source.fit(mock_data, epochs=2)
+
+    checkpoint_path = tmp_path / "checkpoint.pt"
+    source.save_checkpoint(checkpoint_path)
+    assert checkpoint_path.exists()
+
+    target = Distiller(teacher=DummyModel(), student=DummyModel(), optimizer="sgd", device="cpu")
+    target.load_checkpoint(checkpoint_path)
+
+    # Student weights restored exactly.
+    assert torch.allclose(target.student.fc.weight, source.student.fc.weight)
+    # Optimizer state restored (momentum buffers / step counts populated by training).
+    target_state_keys = target.optimizer.state_dict()["state"].keys()
+    source_state_keys = source.optimizer.state_dict()["state"].keys()
+    assert target_state_keys == source_state_keys
+    # History restored, so resuming continues from epoch 3.
+    assert target.history == source.history
+
+    target.fit(mock_data, epochs=3, resume=True)
+    assert len(target.history["train_loss"]) == 3
+
+
+def test_load_checkpoint_raises_on_scheduler_mismatch(mock_data, tmp_path: Path):
+    """Verifies a scheduler-configuration mismatch between save/load raises clearly."""
+    from torch.optim.lr_scheduler import StepLR
+
+    with_scheduler = Distiller(teacher=DummyModel(), student=DummyModel(), optimizer="sgd")
+    with_scheduler.scheduler = StepLR(with_scheduler.optimizer, step_size=1)
+    with_scheduler._engine.scheduler = with_scheduler.scheduler
+
+    checkpoint_path = tmp_path / "with_scheduler.pt"
+    with_scheduler.save_checkpoint(checkpoint_path)
+
+    without_scheduler = Distiller(teacher=DummyModel(), student=DummyModel(), optimizer="sgd")
+    with pytest.raises(ValueError, match="no scheduler configured"):
+        without_scheduler.load_checkpoint(checkpoint_path)
+
+    no_scheduler_checkpoint = tmp_path / "no_scheduler.pt"
+    without_scheduler.save_checkpoint(no_scheduler_checkpoint)
+    with pytest.raises(ValueError, match="saved without one"):
+        with_scheduler.load_checkpoint(no_scheduler_checkpoint)
+
+
+# ==========================================
+# 9. EXPORT
+# ==========================================
+
+
+def test_export_onnx_delegates_to_student(base_distiller, tmp_path: Path):
+    """Verifies export_onnx exports self.student, not the teacher."""
+    import onnx
+
+    out_path = tmp_path / "student.onnx"
+    sample_input = torch.randn(1, 10)
+
+    result = base_distiller.export_onnx(out_path, sample_input)
+
+    assert result == out_path
+    assert out_path.exists()
+    onnx.checker.check_model(onnx.load(str(out_path)))
+
+
+def test_export_torchscript_delegates_to_student(base_distiller, tmp_path: Path):
+    """Verifies export_torchscript exports self.student and round-trips correctly."""
+    out_path = tmp_path / "student.pt"
+    sample_input = torch.randn(1, 10)
+
+    base_distiller.export_torchscript(out_path, sample_input=sample_input, method="trace")
+
+    loaded = torch.jit.load(str(out_path))
+    with torch.no_grad():
+        expected = base_distiller.student(sample_input)
+        actual = loaded(sample_input)
+    assert torch.allclose(expected, actual)
+
+
+# ==========================================
+# 10. FLOPS IN BENCHMARK
+# ==========================================
+
+
+@patch("shrinkai.distillation.distiller.Profiler.compare")
+def test_benchmark_forwards_compute_flops(mock_compare, base_distiller):
+    """Verifies compute_flops is forwarded to Profiler.compare."""
+    sample_input = torch.randn(1, 10)
+
+    base_distiller.benchmark(sample_input, compute_flops=True)
+
+    kwargs = mock_compare.call_args.kwargs
+    assert kwargs["compute_flops"] is True
