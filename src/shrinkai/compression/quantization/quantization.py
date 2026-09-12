@@ -60,9 +60,11 @@ class QuantConfig:
             - "bitsandbytes": (Reserved for future LLM integration) Block-wise quantization.
             Defaults to "torch".
 
-        calibrate_data (Any | None): A dataloader used exclusively for Static PTQ.
-            If provided, the quantizer will run a forward pass on this data to calibrate
-            activation scales before conversion. If None, Dynamic PTQ is used.
+        calibrate_data (Any | None): A dataloader (or any iterable of batches, each
+            either a plain input tensor or a `(inputs, labels, ...)` tuple/list) used
+            exclusively for Static PTQ. If provided, the quantizer runs a forward
+            pass over this data to calibrate activation scales before conversion.
+            If None, Dynamic PTQ is used instead (weights only, no calibration).
             Defaults to None.
     """
 
@@ -124,24 +126,56 @@ class Quantizer:
 
     def _apply_ptq(self, model: nn.Module) -> nn.Module:
         """
-        Applies Dynamic Post-Training Quantization (PTQ).
-        Immediately converts weights (typically Linear and LSTM layers) to int8.
+        Applies Post-Training Quantization (PTQ).
+
+        Uses Static PTQ (calibrated on `config.calibrate_data`) if provided,
+        otherwise falls back to Dynamic PTQ (weights only, no calibration needed).
         Ideal for immediate inference optimization without retraining.
         """
         logger.info(
             f"Applying PTQ ({self.config.target_dtype}) using {self.config.backend} backend..."
         )
 
-        if self.config.backend == "torch" and self.config.target_dtype == "int8":
-            quantized_model = torch.ao.quantization.quantize_dynamic(
-                model, {nn.Linear}, dtype=torch.qint8
-            )
-            return quantized_model
-        else:
+        if self.config.backend != "torch" or self.config.target_dtype != "int8":
             raise NotImplementedError(
                 f"PTQ is not yet supported for backend '{self.config.backend}' "
                 f"with dtype '{self.config.target_dtype}'."
             )
+
+        if self.config.calibrate_data is not None:
+            return self._apply_static_ptq(model)
+
+        return torch.ao.quantization.quantize_dynamic(model, {nn.Linear}, dtype=torch.qint8)
+
+    def _apply_static_ptq(self, model: nn.Module) -> nn.Module:
+        """
+        Applies Static Post-Training Quantization, calibrated on `config.calibrate_data`.
+
+        Wraps the model with `QuantStub`/`DeQuantStub` (via `QuantWrapper`) so it keeps
+        accepting and returning standard float tensors, runs a calibration pass over
+        `config.calibrate_data` to observe activation ranges, then converts both
+        weights and activations to int8.
+
+        Note:
+            For best accuracy, fuse Conv-BN-ReLU sequences on `model` (via
+            `torch.ao.quantization.fuse_modules`) before calling `apply()`. This
+            implementation works without fusion, at the cost of some accuracy.
+        """
+        logger.info("Calibrating activations for Static PTQ...")
+
+        wrapped_model = torch.ao.quantization.QuantWrapper(model)
+        wrapped_model.eval()
+
+        engine = torch.backends.quantized.engine
+        wrapped_model.qconfig = torch.ao.quantization.get_default_qconfig(engine)
+        prepared_model = torch.ao.quantization.prepare(wrapped_model, inplace=False)
+
+        with torch.no_grad():
+            for batch in self.config.calibrate_data:
+                inputs = batch[0] if isinstance(batch, list | tuple) else batch
+                prepared_model(inputs)
+
+        return torch.ao.quantization.convert(prepared_model, inplace=False)
 
     def _apply_qat(self, model: nn.Module) -> nn.Module:
         """
