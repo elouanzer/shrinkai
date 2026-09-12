@@ -1,4 +1,5 @@
 from collections.abc import Iterable, Mapping
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -61,7 +62,7 @@ class FeatureExtractor(nn.Module):
             self._hooks.append(handle)
 
     def forward(
-        self, x: torch.Tensor, *args, **kwargs
+        self, x: torch.Tensor, *args: Any, **kwargs: Any
     ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
         """Performs a forward pass and captures intermediate features.
 
