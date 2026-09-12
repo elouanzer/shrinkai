@@ -1,4 +1,4 @@
-import copy
+import io
 import logging
 from dataclasses import dataclass
 
@@ -13,6 +13,20 @@ from ...profiler.benchmark import BenchmarkReport, Profiler
 logger = logging.getLogger(__name__)
 
 
+def _clone_module(model: nn.Module) -> nn.Module:
+    """Deep-clones a module via a serialization round-trip.
+
+    `copy.deepcopy` raises on modules with active `torch.nn.utils.prune`
+    reparametrizations (masked weights are non-leaf tensors, which
+    `Tensor.__deepcopy__` rejects). A `torch.save`/`torch.load` round-trip
+    serializes the same tensors without going through that code path.
+    """
+    buffer = io.BytesIO()
+    torch.save(model, buffer)
+    buffer.seek(0)
+    return torch.load(buffer, weights_only=False)
+
+
 @dataclass
 class PruningConfig:
     """
@@ -22,8 +36,12 @@ class PruningConfig:
         method (str): The pruning strategy to apply.
             - "unstructured": Removes individual weights based on L1-norm (closest to zero).
               Creates sparse tensors but doesn't change tensor shapes.
-            - "structured": Removes entire channels/neurons (e.g., L2-norm).
-              Physically reduces the computational graph footprint.
+            - "structured": Zeroes entire channels/neurons based on their Ln-norm,
+              via `torch.nn.utils.prune`. This does NOT change tensor shapes either:
+              the pruned channels stay in memory as zeros, so it does not by itself
+              reduce parameter count, model size, or inference latency on standard
+              hardware. To physically remove channels (actually shrinking the
+              model), use `ChannelPruner` instead.
             Defaults to "unstructured".
 
         amount (float): The fraction of weights/channels to prune.
@@ -155,7 +173,7 @@ class Pruner:
         Returns:
                     BenchmarkReport: Structured benchmark report ready for `.show()`.
         """
-        eval_pruned_model = copy.deepcopy(pruned_model)
+        eval_pruned_model = _clone_module(pruned_model)
         eval_pruned_model = self.finalize(eval_pruned_model)
 
         original_acc: float | None = None
