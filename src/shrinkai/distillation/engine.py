@@ -26,6 +26,8 @@ class DistillationEngine:
         optimizer: torch.optim.Optimizer,
         device: torch.device | str = "auto",
         scheduler: torch.optim.lr_scheduler._LRScheduler | None = None,
+        use_amp: bool = False,
+        grad_clip_norm: float | None = None,
     ) -> None:
         """Initializes the DistillationEngine.
 
@@ -36,6 +38,11 @@ class DistillationEngine:
             optimizer: PyTorch optimizer targeting student parameters.
             device: Computing device ('auto', 'mps', 'cuda', 'cpu' or torch.device).
             scheduler: Optional learning rate scheduler updated per epoch.
+            use_amp: If True, runs the forward passes and loss computation under
+                mixed precision (`torch.autocast`). Uses fp16 with gradient scaling
+                on CUDA, and bf16 (no scaling needed) on CPU/MPS. Defaults to False.
+            grad_clip_norm: If set, clips the student's gradient global L2 norm to
+                this value before each optimizer step. Defaults to None (no clipping).
         """
         self.device = resolve_device(device)
         self.student = student.to(self.device)
@@ -43,6 +50,12 @@ class DistillationEngine:
         self.criterion = criterion.to(self.device)
         self.optimizer = optimizer
         self.scheduler = scheduler
+
+        self.use_amp = use_amp
+        self.grad_clip_norm = grad_clip_norm
+        self._amp_dtype = torch.float16 if self.device.type == "cuda" else torch.bfloat16
+        self._use_scaler = self.use_amp and self.device.type == "cuda"
+        self.scaler = torch.amp.GradScaler(device="cuda", enabled=self._use_scaler)
 
         self.teacher.eval()
         for param in self.teacher.parameters():
@@ -105,17 +118,24 @@ class DistillationEngine:
         for batch in pbar:
             inputs, labels = self._unpack_batch(batch)
 
-            with torch.no_grad():
+            with (
+                torch.no_grad(),
+                torch.autocast(
+                    device_type=self.device.type, dtype=self._amp_dtype, enabled=self.use_amp
+                ),
+            ):
                 teacher_outputs = self._forward_model(self.teacher, inputs)
 
             self.optimizer.zero_grad()
-            student_outputs = self._forward_model(self.student, inputs)
-
-            loss = self.criterion(
-                student_outputs=student_outputs,
-                teacher_outputs=teacher_outputs,
-                labels=labels,
-            )
+            with torch.autocast(
+                device_type=self.device.type, dtype=self._amp_dtype, enabled=self.use_amp
+            ):
+                student_outputs = self._forward_model(self.student, inputs)
+                loss = self.criterion(
+                    student_outputs=student_outputs,
+                    teacher_outputs=teacher_outputs,
+                    labels=labels,
+                )
 
             if not math.isfinite(loss.item()):
                 raise RuntimeError(
@@ -123,8 +143,18 @@ class DistillationEngine:
                     "Check learning rate or data scaling."
                 )
 
-            loss.backward()
-            self.optimizer.step()
+            if self._use_scaler:
+                self.scaler.scale(loss).backward()
+                if self.grad_clip_norm is not None:
+                    self.scaler.unscale_(self.optimizer)
+                    nn.utils.clip_grad_norm_(self.student.parameters(), self.grad_clip_norm)
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+            else:
+                loss.backward()
+                if self.grad_clip_norm is not None:
+                    nn.utils.clip_grad_norm_(self.student.parameters(), self.grad_clip_norm)
+                self.optimizer.step()
 
             student_logits = (
                 student_outputs[0] if isinstance(student_outputs, tuple) else student_outputs
@@ -167,7 +197,12 @@ class DistillationEngine:
         correct = 0
         total_samples = 0
 
-        with torch.no_grad():
+        with (
+            torch.no_grad(),
+            torch.autocast(
+                device_type=self.device.type, dtype=self._amp_dtype, enabled=self.use_amp
+            ),
+        ):
             for batch in dataloader:
                 inputs, labels = self._unpack_batch(batch)
 
@@ -208,26 +243,38 @@ class DistillationEngine:
         val_dataloader: DataLoader | None = None,
         epochs: int = 10,
         callbacks: list[Callable[[int, dict[str, float]], None]] | None = None,
+        start_epoch: int = 1,
+        history: dict[str, list[float]] | None = None,
     ) -> dict[str, list[float]]:
         """Executes the full distillation training loop.
 
         Args:
             train_dataloader: Dataloader containing training dataset.
             val_dataloader: Optional dataloader for epoch-end validation.
-            epochs: Total number of epochs to train. Defaults to 10.
+            epochs: Total number of epochs to train up to (1-indexed, inclusive).
+                Defaults to 10.
             callbacks: Optional list of callback functions triggered each epoch.
+                A callback exposing a truthy `stop` attribute after being called
+                (e.g. `EarlyStopping`) interrupts training at the end of that epoch.
+            start_epoch: 1-based epoch index to resume training from. Defaults to 1
+                (a fresh run). Used together with `history` when resuming from a
+                checkpoint saved via `Distiller.save_checkpoint`.
+            history: Existing training history to append to, as returned by a
+                previous call to `fit`. Defaults to None (starts a fresh history).
 
         Returns:
-            dict[str, list[float]]: Training history tracking loss and metrics.
+            dict[str, list[float]]: Training history tracking loss and metrics,
+            covering both the resumed epochs (if any) and the new ones.
         """
-        history: dict[str, list[float]] = {
-            "train_loss": [],
-            "train_accuracy": [],
-            "val_loss": [],
-            "val_accuracy": [],
-        }
+        if history is None:
+            history = {
+                "train_loss": [],
+                "train_accuracy": [],
+                "val_loss": [],
+                "val_accuracy": [],
+            }
 
-        for epoch in range(1, epochs + 1):
+        for epoch in range(start_epoch, epochs + 1):
             train_metrics = self.train_epoch(train_dataloader, epoch, epochs)
             history["train_loss"].append(train_metrics["loss"])
             history["train_accuracy"].append(train_metrics["accuracy"])
@@ -257,5 +304,9 @@ class DistillationEngine:
                 epoch_summary = {**train_metrics, **val_metrics}
                 for callback in callbacks:
                     callback(epoch, epoch_summary)
+
+                if any(getattr(callback, "stop", False) for callback in callbacks):
+                    tqdm.write(f"Training stopped early at epoch {epoch}/{epochs}.")
+                    break
 
         return history

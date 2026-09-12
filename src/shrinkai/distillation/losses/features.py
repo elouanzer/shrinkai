@@ -191,7 +191,7 @@ class AttentionMapLoss(BaseDistillationLoss):
         Args:
             student_outputs: Tensor or dict of attention matrices from the student.
             teacher_outputs: Tensor or dict of attention matrices from the teacher.
-            Ground-truth labels (ignored, kept for API compatibility).
+            labels: Ground-truth labels (ignored, kept for API compatibility).
 
         Returns:
             torch.Tensor: Aggregated scalar loss value.
