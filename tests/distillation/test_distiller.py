@@ -8,7 +8,9 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from shrinkai.adapters import FeatureExtractor
 from shrinkai.distillation.distiller import Distiller
+from shrinkai.distillation.engine import DistillationEngine
 from shrinkai.distillation.losses.base import BaseDistillationLoss
+from shrinkai.distillation.losses.logits import HintonLoss
 
 # ==========================================
 # 1. MOCK CLASSES & FIXTURES
@@ -377,3 +379,51 @@ def test_benchmark_forwards_compute_flops(mock_compare, base_distiller):
 
     kwargs = mock_compare.call_args.kwargs
     assert kwargs["compute_flops"] is True
+
+
+# ==========================================
+# 11. CUSTOM ENGINE CLASS
+# ==========================================
+
+
+class RecordingEngine(DistillationEngine):
+    """Minimal custom engine used to verify `engine_class` wiring end-to-end."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.train_epoch_calls = 0
+
+    def train_epoch(self, dataloader, epoch_idx, total_epochs):
+        self.train_epoch_calls += 1
+        return super().train_epoch(dataloader, epoch_idx, total_epochs)
+
+
+def test_distiller_defaults_to_base_engine_class():
+    """Verifies that omitting engine_class keeps the plain DistillationEngine."""
+    distiller = Distiller(teacher=DummyModel(), student=DummyModel(), optimizer="sgd", device="cpu")
+
+    assert type(distiller._engine) is DistillationEngine
+
+
+def test_distiller_uses_custom_engine_class(mock_data):
+    """Verifies engine_class is instantiated instead of the default DistillationEngine,
+    and that it receives the exact criterion/optimizer Distiller built for it.
+    """
+    criterion = HintonLoss()
+    distiller = Distiller(
+        teacher=DummyModel(),
+        student=DummyModel(),
+        criterion=criterion,
+        optimizer="sgd",
+        device="cpu",
+        engine_class=RecordingEngine,
+    )
+
+    assert isinstance(distiller._engine, RecordingEngine)
+    assert distiller._engine.criterion is criterion
+    assert distiller._engine.optimizer is distiller.optimizer
+
+    history = distiller.fit(mock_data, epochs=2)
+
+    assert distiller._engine.train_epoch_calls == 2
+    assert len(history["train_loss"]) == 2

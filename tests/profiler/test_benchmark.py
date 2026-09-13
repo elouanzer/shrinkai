@@ -48,6 +48,28 @@ def test_benchmark_report_show(dummy_profiles):
         pytest.fail(f"BenchmarkReport.show() crashed with: {e}")
 
 
+def test_benchmark_report_show_with_flops(dummy_profiles):
+    """Verifies the FLOPs row renders without crashing when both profiles have it."""
+    teacher, student = dummy_profiles
+    teacher.flops = 1_000_000
+    student.flops = 400_000
+    report = BenchmarkReport(teacher, student)
+
+    try:
+        report.show()
+    except Exception as e:
+        pytest.fail(f"BenchmarkReport.show() crashed with FLOPs set: {e}")
+
+
+def test_benchmark_report_show_without_flops_omits_row(dummy_profiles):
+    """Verifies no FLOPs row is added when flops is None (the default)."""
+    teacher, student = dummy_profiles
+    report = BenchmarkReport(teacher, student)
+    report.show()  # should not raise, and simply skip the FLOPs row
+    assert teacher.flops is None
+    assert student.flops is None
+
+
 # ==========================================
 # PROFILER COMPARE TESTS
 # ==========================================
@@ -88,3 +110,34 @@ def test_profiler_compare(mock_latency, mock_size, mock_params):
 
     # Ensure latency function was called exactly twice (once for each model)
     assert mock_latency.call_count == 2
+
+    # compute_flops defaults to False: flops should not be computed
+    assert report.teacher.flops is None
+    assert report.student.flops is None
+
+
+@patch("shrinkai.profiler.benchmark.count_flops")
+@patch("shrinkai.profiler.benchmark.count_parameters")
+@patch("shrinkai.profiler.benchmark.estimate_model_size_mb")
+@patch("shrinkai.profiler.benchmark.measure_latency")
+def test_profiler_compare_with_compute_flops(mock_latency, mock_size, mock_params, mock_flops):
+    """Verifies compute_flops=True populates ModelProfile.flops for both models."""
+    mock_params.side_effect = [{"total_params": 100}, {"total_params": 50}]
+    mock_size.side_effect = [10.0, 5.0]
+    mock_latency.side_effect = [
+        {"sample_latency_ms": 2.0, "fps": 500.0},
+        {"sample_latency_ms": 1.0, "fps": 1000.0},
+    ]
+    mock_flops.side_effect = [200_000, 80_000]
+
+    report = Profiler.compare(
+        teacher=nn.Linear(10, 10),
+        student=nn.Linear(10, 5),
+        sample_input=torch.randn(1, 10),
+        device="cpu",
+        compute_flops=True,
+    )
+
+    assert mock_flops.call_count == 2
+    assert report.teacher.flops == 200_000
+    assert report.student.flops == 80_000
