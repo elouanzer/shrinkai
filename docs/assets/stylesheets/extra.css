@@ -45,6 +45,26 @@
   --md-default-fg-color--lightest: #21262D;
 
   --md-code-bg-color: #0D1117;
+
+  /* VS Code "Dark+" syntax colors. Material only defines --md-code-hl-*
+     under [data-md-color-scheme="default"] (light), so without this,
+     highlighted code uses the exact same (light-oriented) token colors in
+     dark mode — low contrast, and the reason this block exists. */
+  --md-code-fg-color: #D4D4D4;
+  --md-code-hl-color: #569CD6;
+  --md-code-hl-color--light: #569cd626;
+  --md-code-hl-keyword-color: #569CD6;
+  --md-code-hl-function-color: #DCDCAA;
+  --md-code-hl-constant-color: #4FC1FF;
+  --md-code-hl-name-color: #D4D4D4;
+  --md-code-hl-variable-color: #9CDCFE;
+  --md-code-hl-string-color: #CE9178;
+  --md-code-hl-number-color: #B5CEA8;
+  --md-code-hl-special-color: #D7BA7D;
+  --md-code-hl-comment-color: #6A9955;
+  --md-code-hl-operator-color: #D4D4D4;
+  --md-code-hl-punctuation-color: #D4D4D4;
+  --md-code-hl-generic-color: #D4D4D4;
 }
 
 [data-md-color-scheme="shrinkai-dark"] body,
@@ -199,6 +219,32 @@
   width: auto;
 }
 
+/* GitHub repo link: reordered to sit to the left of the light/dark theme
+   toggle instead of its default position (after the search box). The
+   theme reserves a fixed width on .md-header__source (sized for a
+   typical repo name), wider than this short one, which otherwise leaves
+   a blank gap before the next button — shrink it to fit its content. */
+.md-header__inner > .md-header__source {
+  order: 1;
+  width: auto;
+  max-width: none;
+}
+
+.md-header__source .md-source__repository {
+  width: auto;
+  max-width: none;
+  overflow: visible;
+  text-overflow: unset;
+}
+
+.md-header__inner > .md-header__option {
+  order: 2;
+}
+
+.md-header__inner > .md-search {
+  order: 3;
+}
+
 
 /* =========================================
    LINKS
@@ -268,6 +314,20 @@
   color: #2DADCF !important;
 }
 
+/* Top-level API Reference packages (adapters, compression, distillation, ...):
+   depth-1 nav items that have children, i.e. not the flat Tutorials leaves
+   which sit at the same depth but never carry --nested. Bold in both themes;
+   white only in dark mode, where the sidebar background is dark enough for it
+   to stay legible (in light mode it would vanish against the near-white background). */
+.md-nav[data-md-level="1"] > .md-nav__list > .md-nav__item--nested > .md-nav__link {
+  font-weight: 700;
+}
+
+[data-md-color-scheme="shrinkai-dark"] .md-nav[data-md-level="1"] > .md-nav__list > .md-nav__item--nested > .md-nav__link {
+  color: #FFFFFF !important;
+  font-weight: 700;
+}
+
 
 /* =========================================
    BUTTONS
@@ -307,6 +367,276 @@
 
 .md-typeset code {
   border-radius: 0.25rem;
+}
+
+
+/* =========================================
+   NOTEBOOK CODE CELLS (DARK MODE)
+   ========================================= */
+
+/* mkdocs-jupyter renders notebooks via nbconvert, which styles code cells,
+   outputs, and syntax highlighting entirely through JupyterLab's own
+   --jp-* CSS variables and a handful of extra selectors (.highlight pre,
+   table.dataframe, ...), all defined light-only, inline, once per notebook
+   page. Left alone, cells and outputs stay light-themed even when the site
+   is in dark mode. mkdocs-jupyter actually already ships a dark-mode
+   counterpart for every one of these rules — but scoped to
+   [data-md-color-scheme="slate"], mkdocs-material's own default dark scheme
+   name. Since this site's dark scheme is named "shrinkai-dark" instead, that
+   ready-made styling never triggers. The rules below are that same
+   mkdocs-jupyter CSS, verbatim, just re-scoped to "shrinkai-dark" — not a
+   hand-picked palette, so cell backgrounds, outputs, and pygments token
+   colors (keyword, string, number, comment, ...) all match nbconvert's own
+   real dark theme. */
+[data-md-color-scheme="shrinkai-dark"] .jupyter-wrapper {
+  --jp-shadow-base-lightness: 32;
+  --jp-shadow-umbra-color: rgba(var(--jp-shadow-base-lightness), var(--jp-shadow-base-lightness), var(--jp-shadow-base-lightness), .2);
+  --jp-shadow-penumbra-color: rgba(var(--jp-shadow-base-lightness), var(--jp-shadow-base-lightness), var(--jp-shadow-base-lightness), .14);
+  --jp-shadow-ambient-color: rgba(var(--jp-shadow-base-lightness), var(--jp-shadow-base-lightness), var(--jp-shadow-base-lightness), .12);
+  --jp-elevation-z0: none;
+  --jp-elevation-z1: 0px 2px 1px -1px var(--jp-shadow-umbra-color), 0px 1px 1px 0px var(--jp-shadow-penumbra-color), 0px 1px 3px 0px var(--jp-shadow-ambient-color);
+  --jp-elevation-z2: 0px 3px 1px -2px var(--jp-shadow-umbra-color), 0px 2px 2px 0px var(--jp-shadow-penumbra-color), 0px 1px 5px 0px var(--jp-shadow-ambient-color);
+  --jp-elevation-z4: 0px 2px 4px -1px var(--jp-shadow-umbra-color), 0px 4px 5px 0px var(--jp-shadow-penumbra-color), 0px 1px 10px 0px var(--jp-shadow-ambient-color);
+  --jp-elevation-z6: 0px 3px 5px -1px var(--jp-shadow-umbra-color), 0px 6px 10px 0px var(--jp-shadow-penumbra-color), 0px 1px 18px 0px var(--jp-shadow-ambient-color);
+  --jp-elevation-z8: 0px 5px 5px -3px var(--jp-shadow-umbra-color), 0px 8px 10px 1px var(--jp-shadow-penumbra-color), 0px 3px 14px 2px var(--jp-shadow-ambient-color);
+  --jp-elevation-z12: 0px 7px 8px -4px var(--jp-shadow-umbra-color), 0px 12px 17px 2px var(--jp-shadow-penumbra-color), 0px 5px 22px 4px var(--jp-shadow-ambient-color);
+  --jp-elevation-z16: 0px 8px 10px -5px var(--jp-shadow-umbra-color), 0px 16px 24px 2px var(--jp-shadow-penumbra-color), 0px 6px 30px 5px var(--jp-shadow-ambient-color);
+  --jp-elevation-z20: 0px 10px 13px -6px var(--jp-shadow-umbra-color), 0px 20px 31px 3px var(--jp-shadow-penumbra-color), 0px 8px 38px 7px var(--jp-shadow-ambient-color);
+  --jp-elevation-z24: 0px 11px 15px -7px var(--jp-shadow-umbra-color), 0px 24px 38px 3px var(--jp-shadow-penumbra-color), 0px 9px 46px 8px var(--jp-shadow-ambient-color);
+  --jp-border-width: 1px;
+  --jp-border-color0: var(--md-grey-700);
+  --jp-border-color1: var(--md-grey-700);
+  --jp-border-color2: var(--md-grey-800);
+  --jp-border-color3: var(--md-grey-900);
+  --jp-inverse-border-color: var(--md-grey-600);
+  --jp-border-radius: 2px;
+  --jp-ui-font-color0: rgba(255, 255, 255, 1);
+  --jp-ui-font-color1: rgba(255, 255, 255, .87);
+  --jp-ui-font-color2: rgba(255, 255, 255, .54);
+  --jp-ui-font-color3: rgba(255, 255, 255, .38);
+  --jp-ui-inverse-font-color0: rgba(0, 0, 0, 1);
+  --jp-ui-inverse-font-color1: rgba(0, 0, 0, .8);
+  --jp-ui-inverse-font-color2: rgba(0, 0, 0, .5);
+  --jp-ui-inverse-font-color3: rgba(0, 0, 0, .3);
+  --jp-content-font-color0: rgba(255, 255, 255, 1);
+  --jp-content-font-color1: rgba(255, 255, 255, 1);
+  --jp-content-font-color2: rgba(255, 255, 255, .7);
+  --jp-content-font-color3: rgba(255, 255, 255, .5);
+  --jp-content-link-color: var(--md-blue-300);
+  --jp-layout-color0: #111111;
+  --jp-layout-color1: var(--md-grey-900);
+  --jp-layout-color2: var(--md-grey-800);
+  --jp-layout-color3: var(--md-grey-700);
+  --jp-layout-color4: var(--md-grey-600);
+  --jp-inverse-layout-color0: white;
+  --jp-inverse-layout-color1: white;
+  --jp-inverse-layout-color2: var(--md-grey-200);
+  --jp-inverse-layout-color3: var(--md-grey-400);
+  --jp-inverse-layout-color4: var(--md-grey-600);
+  --jp-brand-color0: var(--md-blue-700);
+  --jp-brand-color1: var(--md-blue-500);
+  --jp-brand-color2: var(--md-blue-300);
+  --jp-brand-color3: var(--md-blue-100);
+  --jp-brand-color4: var(--md-blue-50);
+  --jp-accent-color0: var(--md-green-700);
+  --jp-accent-color1: var(--md-green-500);
+  --jp-accent-color2: var(--md-green-300);
+  --jp-accent-color3: var(--md-green-100);
+  --jp-warn-color0: var(--md-orange-700);
+  --jp-warn-color1: var(--md-orange-500);
+  --jp-warn-color2: var(--md-orange-300);
+  --jp-warn-color3: var(--md-orange-100);
+  --jp-error-color0: var(--md-red-700);
+  --jp-error-color1: var(--md-red-500);
+  --jp-error-color2: var(--md-red-300);
+  --jp-error-color3: var(--md-red-100);
+  --jp-success-color0: var(--md-green-700);
+  --jp-success-color1: var(--md-green-500);
+  --jp-success-color2: var(--md-green-300);
+  --jp-success-color3: var(--md-green-100);
+  --jp-info-color0: var(--md-cyan-700);
+  --jp-info-color1: var(--md-cyan-500);
+  --jp-info-color2: var(--md-cyan-300);
+  --jp-info-color3: var(--md-cyan-100);
+  --jp-cell-editor-background: var(--jp-layout-color1);
+  --jp-cell-editor-border-color: var(--md-grey-700);
+  --jp-cell-editor-box-shadow: inset 0 0 2px var(--md-blue-300);
+  --jp-cell-editor-active-background: var(--jp-layout-color0);
+  --jp-cell-editor-active-border-color: var(--jp-brand-color1);
+  --jp-cell-prompt-opacity: 1;
+  --jp-cell-prompt-not-active-opacity: 1;
+  --jp-cell-prompt-not-active-font-color: var(--md-grey-300);
+  --jp-cell-inprompt-font-color: #307fc1;
+  --jp-cell-outprompt-font-color: #bf5b3d;
+  --jp-notebook-select-background: var(--jp-layout-color1);
+  --jp-notebook-multiselected-color: rgba(33, 150, 243, .24);
+  --jp-rendermime-error-background: rgba(244, 67, 54, .28);
+  --jp-rendermime-table-row-background: var(--md-grey-900);
+  --jp-rendermime-table-row-hover-background: rgba(3, 169, 244, .2);
+  --jp-dialog-background: rgba(0, 0, 0, .6);
+  --jp-toolbar-border-color: var(--jp-border-color2);
+  --jp-toolbar-background: var(--jp-layout-color1);
+  --jp-toolbar-box-shadow: 0px 0px 2px 0px rgba(0, 0, 0, .8);
+  --jp-toolbar-active-background: var(--jp-layout-color0);
+  --jp-input-box-shadow: inset 0 0 2px var(--md-blue-300);
+  --jp-input-active-background: var(--jp-layout-color0);
+  --jp-input-hover-background: var(--jp-layout-color2);
+  --jp-input-background: var(--md-grey-800);
+  --jp-input-border-color: var(--jp-inverse-border-color);
+  --jp-input-active-border-color: var(--jp-brand-color1);
+  --jp-input-active-box-shadow-color: rgba(19, 124, 189, .3);
+  --jp-editor-selected-background: var(--jp-layout-color2);
+  --jp-editor-selected-focused-background: rgba(33, 150, 243, .24);
+  --jp-editor-cursor-color: var(--jp-ui-font-color0);
+  /* Aliased to the same --md-code-hl-* variables used by regular (non-notebook)
+     highlighted code, so code cells and markdown-cell code fences render
+     with the exact same VS Code Dark+ palette instead of two slightly
+     different dark themes. */
+  --jp-mirror-editor-keyword-color: var(--md-code-hl-keyword-color);
+  --jp-mirror-editor-atom-color: var(--md-code-hl-keyword-color);
+  --jp-mirror-editor-number-color: var(--md-code-hl-number-color);
+  --jp-mirror-editor-def-color: var(--md-code-hl-function-color);
+  --jp-mirror-editor-variable-color: var(--md-code-hl-name-color);
+  --jp-mirror-editor-variable-2-color: var(--md-code-hl-variable-color);
+  --jp-mirror-editor-variable-3-color: var(--md-code-hl-variable-color);
+  --jp-mirror-editor-punctuation-color: var(--md-code-hl-punctuation-color);
+  --jp-mirror-editor-property-color: var(--md-code-hl-variable-color);
+  --jp-mirror-editor-operator-color: var(--md-code-hl-operator-color);
+  --jp-mirror-editor-comment-color: var(--md-code-hl-comment-color);
+  --jp-mirror-editor-string-color: var(--md-code-hl-string-color);
+  --jp-mirror-editor-string-2-color: var(--md-code-hl-special-color);
+  --jp-mirror-editor-meta-color: var(--md-code-hl-operator-color);
+  --jp-mirror-editor-qualifier-color: var(--md-code-hl-variable-color);
+  --jp-mirror-editor-builtin-color: var(--md-code-hl-constant-color);
+  --jp-mirror-editor-bracket-color: var(--md-code-hl-punctuation-color);
+  --jp-mirror-editor-tag-color: var(--md-code-hl-keyword-color);
+  --jp-mirror-editor-attribute-color: var(--md-code-hl-variable-color);
+  --jp-mirror-editor-header-color: var(--md-code-hl-keyword-color);
+  --jp-mirror-editor-quote-color: var(--md-code-hl-comment-color);
+  --jp-mirror-editor-link-color: var(--md-code-hl-keyword-color);
+  --jp-mirror-editor-error-color: #F44747;
+  --jp-mirror-editor-hr-color: var(--md-code-hl-punctuation-color);
+  --jp-collaborator-color1: #ad4a00;
+  --jp-collaborator-color2: #7b6a00;
+  --jp-collaborator-color3: #007e00;
+  --jp-collaborator-color4: #008772;
+  --jp-collaborator-color5: #0079b9;
+  --jp-collaborator-color6: #8b45c6;
+  --jp-collaborator-color7: #be208b;
+  --jp-vega-background: var(--md-grey-400);
+  --jp-search-toggle-off-opacity: .6;
+  --jp-search-toggle-hover-opacity: .8;
+  --jp-search-toggle-on-opacity: 1;
+  --jp-search-selected-match-background-color: rgb(255, 225, 0);
+  --jp-search-selected-match-color: black;
+  --jp-search-unselected-match-background-color: var(--jp-inverse-layout-color0);
+  --jp-search-unselected-match-color: var(--jp-ui-inverse-font-color0);
+  --jp-scrollbar-background-color: #3f4244;
+  --jp-scrollbar-thumb-color: 88, 96, 97;
+  --jp-icon-contrast-color0: var(--md-purple-600);
+  --jp-icon-contrast-color1: var(--md-green-600);
+  --jp-icon-contrast-color2: var(--md-pink-600);
+  --jp-icon-contrast-color3: var(--md-blue-600);
+  --jp-jupyter-icon-color: #f37626;
+  --jp-notebook-icon-color: #f37626;
+  --jp-json-icon-color: var(--md-orange-500);
+  --jp-console-icon-background-color: var(--md-blue-500);
+  --jp-console-icon-color: white;
+  --jp-terminal-icon-background-color: var(--md-grey-200);
+  --jp-terminal-icon-color: var(--md-grey-800);
+  --jp-text-editor-icon-color: var(--md-grey-200);
+  --jp-inspector-icon-color: var(--md-grey-200);
+  --jp-switch-color: var(--md-grey-400);
+  --jp-switch-true-position-color: var(--md-orange-700);
+}
+
+/* nbconvert's own .highlight-ipynb CSS (unlike material's .highlight one
+   below) never distinguishes Name.* subtypes — classes, functions, builtins,
+   decorators, and plain identifiers all fall back to the same
+   --jp-mirror-editor-variable-color. Add the missing per-subtype rules,
+   mirroring material's own .highlight grouping so both code paths render
+   identically. */
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .bp,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .nb,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .no {
+  color: var(--md-code-hl-constant-color);
+}
+
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .nc,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .ne,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .nf,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .nn {
+  color: var(--md-code-hl-function-color);
+}
+
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .nd,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .ni,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .nl,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .nt {
+  color: var(--md-code-hl-function-color);
+}
+
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .na,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .nv,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .vc,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .vg,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .vi {
+  color: var(--md-code-hl-variable-color);
+}
+
+/* Class names get their own teal, like VS Code, instead of sharing the
+   function/exception/namespace yellow above. */
+[data-md-color-scheme="shrinkai-dark"] .highlight .nc,
+[data-md-color-scheme="shrinkai-dark"] .highlight-ipynb .nc {
+  color: #4EC9B0;
+}
+
+/* Decorators (@staticmethod, ...): material groups these with keywords by
+   default; VS Code renders them like a function call instead. */
+[data-md-color-scheme="shrinkai-dark"] .highlight .nd {
+  color: var(--md-code-hl-function-color);
+}
+
+/* Markdown-cell fenced code (rendered via mistune, not the nbconvert cell
+   editor above) uses its own ".highlight" wrapper with a hardcoded light
+   background instead of a --jp-* variable. The extra ".jupyter-wrapper" in
+   each selector below (matching the real DOM nesting) is needed to outrank
+   the un-scoped light-mode rule nbconvert inlines on every notebook page,
+   which has the same specificity and would otherwise win on source order. */
+[data-md-color-scheme="shrinkai-dark"] .jupyter-wrapper .highlight pre {
+  background-color: rgb(33, 34, 44);
+  padding: 10px;
+  overflow: auto;
+}
+
+[data-md-color-scheme="shrinkai-dark"] .jupyter-wrapper .clipboard-copy-icon {
+  color: rgb(85, 85, 85) !important;
+}
+
+[data-md-color-scheme="shrinkai-dark"] .jupyter-wrapper .celltoolbar {
+  background: rgb(51, 51, 51) !important;
+}
+
+[data-md-color-scheme="shrinkai-dark"] .jupyter-wrapper .celltoolbar .tags_button_container .tag-container .cell-tag {
+  background-color: transparent !important;
+  border: 1px solid rgb(102, 102, 102) !important;
+}
+
+/* pandas DataFrame HTML outputs (e.g. df.head()) */
+[data-md-color-scheme="shrinkai-dark"] .jupyter-wrapper table.dataframe {
+  color: rgb(233, 235, 252);
+}
+
+[data-md-color-scheme="shrinkai-dark"] .jupyter-wrapper table.dataframe thead {
+  border-bottom: 1px solid rgba(233, 235, 252, 0.12);
+}
+
+[data-md-color-scheme="shrinkai-dark"] .jupyter-wrapper table.dataframe tbody tr:nth-child(2n+1) {
+  background: rgb(34, 34, 34);
+}
+
+[data-md-color-scheme="shrinkai-dark"] .jupyter-wrapper table.dataframe tbody tr:hover {
+  background: rgba(66, 165, 245, 0.2);
 }
 
 

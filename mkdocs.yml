@@ -1,5 +1,10 @@
 site_name: ShrinkAI
 site_description: ShrinkAI Documentation
+repo_url: https://github.com/elouanzer/shrinkai
+repo_name: elouanzer/shrinkai
+
+exclude_docs: |
+  gen_ref_pages.py
 
 theme:
 
@@ -13,8 +18,8 @@ theme:
     #- navigation.instant
     #- navigation.instant.prefetch
     - navigation.tracking
-    - navigation.sections
-    - navigation.expand
+    #- navigation.sections
+    #- navigation.expand
     - navigation.footer
     - navigation.top
     - search.suggest
@@ -44,8 +49,6 @@ extra_css:
 plugins:
   - search:
       lang: en
-      suggest: true
-      highlight: true
   - mkdocstrings:
       default_handler: python
       handlers:
@@ -62,7 +65,9 @@ plugins:
             summary: true
   - mkdocs-jupyter:
       no_prompt: true
-      enable_math: true
+  - gen-files:
+      scripts:
+        - docs/gen_ref_pages.py
   - literate-nav:
       nav_file: SUMMARY.md
   - section-index
@@ -104,14 +109,7 @@ nav:
     - Distillation of Vision models on CIFAR10: tutorials/01_distillation_vision_cifar10.ipynb
     - Distillation of Transformers on SST-2: tutorials/02_distillation_nlp_sst2.ipynb
     - Distillation of Language Models for text generation: tutorials/03_distillation_llm_generation.ipynb
-  - API Reference:
-    - Distillation:
-      - shrinkai.distillation: api/distillation.md
-      - shrinkai.distillation.losses: api/loss.md
-    - Compression: 
-      - shrinkai.compression.pruning: api/pruning.md
-      - shrinkai.compression.quantization: api/quantization.md
-    - Other:
-      - shrinkai.analysis: api/analysis.md
-      - shrinkai.adapters: api/adapters.md
-      - shrinkai.profiler: api/profiler.md
+    - Model Compression (Pruning & Quantization): tutorials/04_compression.ipynb
+    - Customization & Full Training Control: tutorials/05_deep_training.ipynb
+    - Exporting Models for Deployment: tutorials/06_export.ipynb
+  - API Reference: reference/

@@ -1,3 +1,0 @@
-# Profiler
-
-::: shrinkai.profiler

@@ -1,3 +1,0 @@
-# Quantization
-
-::: shrinkai.compression.quantization
