@@ -6,9 +6,9 @@
     <img src="assets/shrinkai-logo-nobackground.png" alt="ShrinkAI Logo" style="width: 750; height: auto; margin-bottom: 1rem;" />
     <div style="display: flex; flex-direction: column; gap: 0.4rem; align-items: center;">
       <a href="https://pypi.org/project/shrinkai/">
-        <img src="https://img.shields.io/pypi/v/shrinkai?color=2860BE&style=flat-square" alt="PyPI version" />
+        <img src="https://img.shields.io/pypi/v/shrinkai?color=2860BE&style=flat-square&cacheSeconds=3600" alt="PyPI version" />
       </a>
-      <img src="https://img.shields.io/pypi/pyversions/shrinkai?color=1595BC&style=flat-square" alt="Python versions" />
+      <img src="https://img.shields.io/pypi/pyversions/shrinkai?color=1595BC&style=flat-square&cacheSeconds=3600" alt="Python versions" />
       <a href="https://github.com/elouanzer/shrinkai">
         <img src="https://img.shields.io/badge/GitHub-Repository-151922?logo=github&style=flat-square" alt="GitHub Repo" />
       </a>
