@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: "ShrinkAI"
+abstract: >-
+  A PyTorch package for knowledge distillation and neural network
+  compression (pruning and quantization), with utilities for benchmarking
+  and exporting models for deployment (ONNX, TorchScript).
+type: software
+authors:
+  - given-names: "Elouan"
+    family-names: "Marsot"
+    alias: "elouanzer"
+    email: "127297713+elouanzer@users.noreply.github.com"
+version: "0.1.0"
+license: MIT
+repository-code: "https://github.com/elouanzer/shrinkai"
+url: "https://elouanzer.github.io/shrinkai/"
