@@ -3,8 +3,27 @@ name = "shrinkai"
 version = "0.1.0"
 description = "Making Neural Network smaller"
 readme = "README.md"
+license = "MIT"
 authors = [
-    { name = "elouanzer", email = "127297713+elouanzer@users.noreply.github.com" }
+    { name = "Elouan Marsot", email = "127297713+elouanzer@users.noreply.github.com" }
+]
+keywords = [
+    "pytorch",
+    "knowledge-distillation",
+    "pruning",
+    "quantization",
+    "model-compression",
+    "deep-learning",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries",
 ]
 requires-python = ">=3.11"
 dependencies = [
@@ -14,6 +33,15 @@ dependencies = [
     "torchvision>=0.28.0",
     "tqdm>=4.70.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/elouanzer/shrinkai"
+Documentation = "https://elouanzer.github.io/shrinkai/"
+Repository = "https://github.com/elouanzer/shrinkai"
+Issues = "https://github.com/elouanzer/shrinkai/issues"
+
+[project.optional-dependencies]
+export = ["onnx>=1.17.0"]
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]
@@ -26,12 +54,25 @@ dev = [
     "huggingface-hub>=1.29.0",
     "ipykernel>=7.3.0",
     "matplotlib>=3.11.1",
-    "mkdocs-gen-files>=0.6.1",
+    # MkDocs 2.0 (still pre-release) removes the plugin system and rewrites
+    # theming, breaking every plugin and theme override this project uses
+    # (see mkdocs-material's own warning about it). None of the mkdocs-*
+    # plugins below cap the "mkdocs" core version themselves, so without
+    # this pin a future `uv lock --upgrade` could jump straight to a
+    # breaking 2.0 the moment it's released stable.
+    "mkdocs>=1.6.1,<2",
+    # Capped below mkdocs-gen-files 0.6.1 / mkdocs-literate-nav 0.6.3 /
+    # mkdocs-section-index 0.3.11: those (and later) releases add a forced
+    # dependency on the unrelated "properdocs" package, which auto-prints a
+    # promotional warning on every `mkdocs` invocation. Do not lift these
+    # caps without re-checking that properdocs is no longer pulled in.
+    "mkdocs-gen-files>=0.6.0,<0.6.1",
     "mkdocs-jupyter>=0.26.3",
-    "mkdocs-literate-nav>=0.6.3",
+    "mkdocs-literate-nav>=0.6.2,<0.6.3",
     "mkdocs-material>=9.7.7",
-    "mkdocs-section-index>=0.3.12",
+    "mkdocs-section-index>=0.3.10,<0.3.11",
     "mkdocstrings[python]>=1.0.6",
+    "onnx>=1.17.0",
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
     "ruff>=0.16.5",
