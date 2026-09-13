@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality:
+    name: Tests, coverage & lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, needed for diff-cover's base-branch comparison
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Ruff check
+        run: uv run ruff check src/ tests/
+
+      - name: Ruff format check
+        run: uv run ruff format --check src/ tests/
+
+      - name: Run tests with coverage
+        run: |
+          uv run coverage run -m pytest
+          uv run coverage report --fail-under=92.5
+          uv run coverage xml
+
+      - name: Coverage on changed lines only
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          uvx diff-cover coverage.xml --compare-branch=origin/${{ github.base_ref }} --fail-under=90
+
+  package-install:
+    name: Package installs cleanly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.11"
+
+      - name: Build the package
+        run: uv build
+
+      - name: Install the built wheel in a clean venv
+        run: |
+          python -m venv /tmp/shrinkai-install-check
+          /tmp/shrinkai-install-check/bin/pip install dist/*.whl
+          /tmp/shrinkai-install-check/bin/python -c "import shrinkai; print(shrinkai.__version__)"
