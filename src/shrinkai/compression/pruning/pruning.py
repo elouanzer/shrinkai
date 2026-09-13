@@ -65,7 +65,7 @@ class PruningConfig:
 
 
 class Pruner:
-    """
+    r"""
     Orchestrates the pruning of PyTorch models to induce sparsity.
 
     The Pruner traverses the model and applies masking to the weights according
@@ -73,9 +73,28 @@ class Pruner:
     PyTorch pruning attaches forward pre-hooks to dynamically mask weights during
     the forward pass, allowing gradient updates on the remaining unpruned weights.
 
+    Equation:
+        Both criteria rank elements/channels by an importance score $s$ and mask
+        (zero out) the fraction `amount` with the lowest score:
+
+        $$
+        s =
+        \begin{cases}
+        |w_i| & \text{unstructured (Han et al. (2015)): per-weight magnitude} \\
+        \|W_j\|_2 = \left(\sum_i w_{j,i}^2\right)^{1/2} & \text{structured: per-output-channel } L_2 \text{ norm}
+        \end{cases}
+        $$
+
+        The structured criterion follows the filter-pruning idea of Li et al.
+        (2017), who originally ranked filters by their $L_1$ norm; this
+        implementation uses PyTorch's `torch.nn.utils.prune.ln_structured` with
+        $n=2$ instead. Neither criterion changes tensor shapes (the pruned
+        elements/channels stay in memory as zeros). Refer to `ChannelPruner` for
+        physical channel removal using the same $L_2$ criterion.
+
     Args:
         config (PruningConfig): The configuration object defining the pruning rules.
-    """
+    """  # noqa: E501
 
     def __init__(self, config: PruningConfig):
         self.config = config

@@ -151,7 +151,8 @@ class PureKDLoss(HintonLoss):
 
 
 class ReverseKLLoss(BaseDistillationLoss):
-    r"""Reverse Kullback-Leibler divergence for Knowledge Distillation.
+    r"""Reverse Kullback-Leibler divergence for Knowledge Distillation (Gu et al. (2024),
+    MiniLLM).
 
     Standard KD (Forward KL) computes KL(P_teacher || P_student), which is "mode-covering".
     Reverse KL computes KL(P_student || P_teacher), which is "mode-seeking".

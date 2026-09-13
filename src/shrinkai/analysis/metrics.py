@@ -28,11 +28,22 @@ class BaseFeatureMetric(ABC):
 
 
 class CKAMetric(BaseFeatureMetric):
-    """Linear Centered Kernel Alignment (CKA).
+    r"""Linear Centered Kernel Alignment (CKA) (Kornblith et al. (2019), building on the
+    Hilbert-Schmidt Independence Criterion of Gretton et al. (2005)).
 
     Measures the similarity of representations across models with different
     architectures or channel dimensions. A score of 1.0 means identical
     representational geometry; 0.0 means completely orthogonal.
+
+    Equation:
+        $$CKA(K, L) = \frac{HSIC(K, L)}{\sqrt{HSIC(K, K) \cdot HSIC(L, L)}}$$
+
+        where $K = X_c X_c^\top$ and $L = Y_c Y_c^\top$ are the Gram matrices of the
+        (already mean-centered) student and teacher activations $X_c, Y_c$, and
+        $HSIC(K, L) \propto \langle K, L \rangle_F = \text{tr}(KL)$ for linear kernels
+        on centered data. The shared normalization constant of the HSIC estimator
+        cancels out in the ratio, so this implementation computes it directly as
+        $\text{tr}(KL) / (\|K\|_F \|L\|_F)$.
     """
 
     @property
@@ -63,10 +74,19 @@ class CKAMetric(BaseFeatureMetric):
 
 
 class RSAMetric(BaseFeatureMetric):
-    """Representational Similarity Analysis (RSA) using Pearson correlation.
+    r"""Representational Similarity Analysis (RSA) using Pearson correlation
+    (Kriegeskorte et al. (2008)).
 
     Measures if the relative distances between samples in a batch are preserved
     between the teacher and the student, regardless of their hidden dimension sizes.
+
+    Equation:
+        $$RSA = \frac{\text{cov}(R_S, R_T)}{\sigma_{R_S} \, \sigma_{R_T}}$$
+
+        where $R_S$ and $R_T$ are the upper-triangular entries of the student's and
+        teacher's Representational (Dis)similarity Matrices, here, pairwise cosine
+        similarities between samples in the batch, and the RSA score is their
+        Pearson correlation across the batch.
     """
 
     @property
@@ -102,10 +122,19 @@ class RSAMetric(BaseFeatureMetric):
 
 
 class SpatialAttentionMetric(BaseFeatureMetric):
-    """Spatial Attention Transfer similarity.
+    r"""Spatial Attention Transfer similarity (Zagoruyko & Komodakis (2017)).
 
     Collapses the channel dimension to measure if the student and teacher
     activate on the same spatial regions of the input (e.g., the foreground object).
+
+    Equation:
+        $$A = \sum_{c=1}^{C} |f_c|, \qquad Spatial = \frac{A_s \cdot A_t}{\|A_s\| \, \|A_t\|}$$
+
+        where $f_c$ is the activation map of channel $c$, $A$ is the resulting
+        spatial attention map (summed absolute activations across channels, the
+        $\mathcal{F}_{sum}^{p=1}$ mapping of the original paper), and the metric is
+        the cosine similarity between the student's and teacher's (L2-normalized,
+        spatially-resized-if-needed) attention maps.
     """
 
     @property

@@ -89,16 +89,35 @@ class QuantConfig:
 
 
 class Quantizer:
-    """
+    r"""
     Orchestrates the quantization of PyTorch models.
 
     The Quantizer reads a `QuantConfig` and safely modifies the computational graph
     of a given PyTorch `nn.Module`. It handles the complexities of PyTorch's native
     quantization APIs.
 
+    Equation:
+        PTQ and QAT both rely on the affine (uniform) quantization scheme of
+        Jacob et al. (2018):
+
+        $$q = \text{clip}\left(\text{round}\left(\frac{x}{s}\right) + z,\ q_{min},\ q_{max}\right), \qquad x \approx s \, (q - z)$$
+
+        where $s > 0$ (scale) and $z$ (zero-point) are derived from the observed
+        range of $x$, via calibration on `calibrate_data` for static PTQ
+        activations, on the fly per-batch for dynamic PTQ, or from weight
+        statistics directly, and $[q_{min}, q_{max}]$ bounds the target integer
+        range (e.g. $[-128, 127]$ for int8). PyTorch's default backends use
+        $z = 0$ (symmetric) for weights and the full affine form for activations.
+
+        For QAT, this same round-trip is simulated in the forward pass ("Fake
+        Quantization") while gradients flow through it via the straight-through
+        estimator ($\partial q / \partial x \approx 1$ inside $[x_{min}, x_{max}]$,
+        $0$ outside), letting the model adapt its weights to the quantization
+        noise before `finalize_qat()` converts it to real integer weights.
+
     Args:
         config (QuantConfig): The configuration object defining the quantization rules.
-    """
+    """  # noqa: E501
 
     def __init__(self, config: QuantConfig):
         self.config = config

@@ -35,18 +35,26 @@ from .base import BaseDistillationLoss
 
 
 class FeatureLoss(BaseDistillationLoss):
-    """Computes the loss between intermediate feature maps of the Teacher and Student.
+    r"""Computes the loss between intermediate feature maps of the Teacher and Student
+    (Romero et al. (2015), FitNets).
 
     This loss encourages the Student to mimic the internal representations (activations)
     of the Teacher. It assumes that the spatial and channel dimensions of the compared
     features have already been matched.
+
+    Equation:
+        $$L_{feature}\left(\hat{f}_s, \hat{f}_t\right) = d\left(\hat{f}_s, \hat{f}_t\right), \quad d \in \{\text{MSE}, \ \text{L1}, \ 1 - \cos\}$$
+
+        where $\hat{f}_s, \hat{f}_t$ are the (optionally L2-normalized) flattened student
+        and teacher feature tensors. The original FitNets "hint" loss corresponds to the
+        MSE case; L1 and cosine are natural extensions of the same idea.
 
     Attributes:
         loss_type (str): Type of loss to compute ('mse', 'l1', or 'cosine').
         normalize (bool): If True, L2-normalizes the feature vectors before computing
             the loss. This is often useful to match the "direction" of features
             regardless of their magnitude.
-    """
+    """  # noqa: E501
 
     def __init__(
         self,
@@ -127,19 +135,31 @@ class FeatureLoss(BaseDistillationLoss):
 
 
 class AttentionMapLoss(BaseDistillationLoss):
-    """Distillation loss for Transformer attention maps.
+    r"""Distillation loss for Transformer attention maps.
 
     This loss forces the student model to mimic the attention patterns of the teacher.
     It operates on attention matrices, typically of shape:
     [Batch, Num_Heads, Seq_Len, Seq_Len].
 
-    Common practices:
-        - TinyBERT: Uses MSE on unnormalized attention scores (before softmax).
-        - DistilBERT / MiniLM: Uses KL Divergence on attention probabilities (after softmax).
+    Equation:
+        $$
+        L_{attn}(A_s, A_t) =
+        \begin{cases}
+        \text{MSE}(A_s, A_t) & \text{(mse, Jiao et al. (2020), TinyBERT)} \\
+        \text{KL}\left(\text{softmax}(A_t) \parallel \text{softmax}(A_s)\right) & \text{(kl, Wang et al. (2020), MiniLM)}
+        \end{cases}
+        $$
+
+        TinyBERT applies MSE directly on the unnormalized attention scores (before
+        softmax); MiniLM instead matches the softmax-normalized attention
+        *distributions* via KL divergence, with the teacher as the reference
+        distribution. Note: DistilBERT (Sanh et al. (2019)) is often mentioned
+        alongside these, but its own distillation objective operates on the output
+        logits and last hidden state, not on attention maps.
 
     Attributes:
         loss_type (str): The metric to use ('mse' or 'kl').
-    """
+    """  # noqa: E501
 
     def __init__(self, loss_type: Literal["mse", "kl"] = "mse") -> None:
         """Initializes the AttentionMapLoss.
@@ -202,7 +222,8 @@ class AttentionMapLoss(BaseDistillationLoss):
 
 
 class GramMatrixLoss(BaseDistillationLoss):
-    """Distillation loss based on Gram Matrices for style and texture transfer.
+    r"""Distillation loss based on Gram Matrices for style and texture transfer
+    (Gatys et al. (2016)).
 
     Instead of forcing the student to match the exact spatial activations of the
     teacher (which is strict and requires identical spatial dimensions), this loss
@@ -211,9 +232,22 @@ class GramMatrixLoss(BaseDistillationLoss):
     This is highly effective for Generative tasks, Super-Resolution, or making a
     student network mimic the global "texture" representation of a teacher.
 
+    Equation:
+        $$
+        \begin{aligned}
+        G_{ij} = \frac{1}{C \cdot N} \sum_{k=1}^{N} F_{ik} F_{jk} \\
+        L_{gram} = d\left(G_s, G_t\right)
+        \end{aligned}
+        $$
+
+        where $F \in \mathbb{R}^{C \times N}$ is a feature map flattened over its
+        $C$ channels and $N$ spatial (or temporal) locations, $G \in \mathbb{R}^{C
+        \times C}$ is its Gram matrix of channel-wise correlations, and $d$ is the
+        configured distance (MSE, L1, or cosine).
+
     Attributes:
         loss_type (str): The distance metric to apply on the Gram matrices ('mse' or 'l1').
-    """
+    """  # noqa: E501
 
     def __init__(self, loss_type: Literal["mse", "l1", "cosine"] = "mse") -> None:
         """Initializes the GramMatrixLoss.

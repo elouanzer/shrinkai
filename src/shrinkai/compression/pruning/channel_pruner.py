@@ -6,7 +6,7 @@ actually rebuilds smaller `Conv2d`/`Linear` (and dependent `BatchNorm`) layers w
 pruned channels physically removed.
 
 Determining which layers can be safely shrunk together requires knowing the model's
-real dataflow graph — removing a layer's output channels is only valid if every
+real dataflow graph, removing a layer's output channels is only valid if every
 downstream consumer of that output has its input channels shrunk to match. This module
 uses `torch.fx` to trace that graph and `torch.fx.passes.shape_prop.ShapeProp` to know
 each node's actual tensor shape.
@@ -18,7 +18,7 @@ Scope (by design, to stay correct rather than merely "not crashing"):
       `Conv2d`/`Linear` layer or the model's final output.
     - A flatten/view/reshape between a 4D conv-style tensor and a `Linear` layer is only
       allowed once the spatial dimensions have already been reduced to 1x1 (e.g. by
-      `AdaptiveAvgPool2d(1)`) — at that point each channel maps to exactly one flattened
+      `AdaptiveAvgPool2d(1)`). At that point each channel maps to exactly one flattened
       feature, so no interleaving ambiguity exists.
     - Grouped/depthwise convolutions (`groups != 1`) are rejected: removing channels
       from a grouped conv can change which input channels feed which output channels,
@@ -216,15 +216,27 @@ def _shrink_batchnorm(bn: nn.Module, keep_indices: torch.Tensor) -> nn.Module:
 
 
 class ChannelPruner:
-    """Physically removes pruned output channels from `Conv2d`/`Linear` layers.
+    r"""Physically removes pruned output channels from `Conv2d`/`Linear` layers.
 
     See the module docstring for the exact topologies this supports and rejects.
+
+    Equation:
+        Output units (rows of the weight tensor) are ranked by their $L_2$ norm,
+        following the filter-pruning criterion of Li et al. (2017) (who originally
+        used the $L_1$ norm; this implementation uses $L_2$, matching `Pruner`'s
+        structured method):
+
+        $$\|W_j\|_2 = \left(\sum_i w_{j,i}^2\right)^{1/2}$$
+
+        The `amount` fraction of channels with the smallest norm are removed,
+        physically, unlike `Pruner`, whose masking-based criterion is identical
+        but only zeroes the weights without changing tensor shapes.
 
     Args:
         amount: Fraction of output channels/neurons to remove from each targeted
             layer, ranked by L2-norm (lowest-norm channels removed first). Must be
             in (0.0, 1.0). Defaults to 0.3.
-    """
+    """  # noqa: E501
 
     def __init__(self, amount: float = 0.3) -> None:
         if not (0.0 < amount < 1.0):
@@ -415,7 +427,7 @@ class ChannelPruner:
 
         Unlike `Pruner.benchmark`, no `.finalize()`-style step is needed first:
         `pruned_model` (as returned by `.apply()`) already has fewer parameters,
-        so real gains in size, latency, and FLOPs are expected here — not just
+        so real gains in size, latency, and FLOPs are expected here, not just
         theoretical sparsity.
 
         Args:
