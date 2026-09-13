@@ -2,8 +2,9 @@
   <img src="https://raw.githubusercontent.com/elouanzer/shrinkai/main/docs/assets/shrinkai-logo-nobackground.png" alt="ShrinkAI Logo" width="200" />
 </p>
 
-[![PyPI version](https://img.shields.io/pypi/v/shrinkai?color=2860BE&style=flat-square)](https://pypi.org/project/shrinkai/)
-![Python versions](https://img.shields.io/pypi/pyversions/shrinkai?color=1595BC&style=flat-square)
+[![PyPI version](https://img.shields.io/pypi/v/shrinkai?color=2860BE&style=flat-square&cacheSeconds=3600)](https://pypi.org/project/shrinkai/)
+![Python versions](https://img.shields.io/pypi/pyversions/shrinkai?color=1595BC&style=flat-square&cacheSeconds=3600)
+[![Documentation](https://img.shields.io/badge/docs-online-2DADCF?style=flat-square)](https://elouanzer.github.io/shrinkai/)
 [![GitHub Repo](https://img.shields.io/badge/GitHub-Repository-151922?logo=github&style=flat-square)](https://github.com/elouanzer/shrinkai)
 ![License](https://img.shields.io/github/license/elouanzer/shrinkai?color=7B8494&style=flat-square)
 
